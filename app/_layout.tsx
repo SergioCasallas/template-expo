@@ -1,39 +1,39 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { useLiveQuery, drizzle } from "drizzle-orm/expo-sqlite";
+import { openDatabaseSync } from "expo-sqlite";
+import { Text } from "react-native";
+import * as schema from "../db/schema";
+import { useDrizzleStudio } from "expo-drizzle-studio-plugin";
+import { useEffect, useState } from "react";
+import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
+import migrations from "@/drizzle/migrations";
+import { addDummyData } from "@/db/addDummyData";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+const App = () => {
+  const db = openDatabaseSync("db", { enableChangeListener: true });
+  // db.execSync([{ sql: "PRAGMA foreign_keys = ON;", args: [] }]);
+  const drizzleDb = drizzle(db);
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+  const [date, setData] = useState<schema.Task[]>([]);
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const migration = useMigrations(drizzleDb, migrations);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    addDummyData(drizzleDb);
 
-  if (!loaded) {
-    return null;
-  }
+    const asyncDAta = async () => {
+      await db.execAsync("PRAGMA foreign_keys = ON");
+    };
+    asyncDAta();
+    // const cargarDatos = async()=>{
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
-}
+    // }
+  }, [migration.success]);
+
+  useDrizzleStudio(db);
+
+  // Re-renders automatically when data changes
+  const { data } = useLiveQuery(drizzleDb.select().from(schema.tasks));
+  return <Text>{JSON.stringify(data)}</Text>;
+};
+
+export default App;
